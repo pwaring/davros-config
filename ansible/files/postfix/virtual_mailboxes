@@ -1,0 +1,5 @@
+# List of mailboxes for virtual domains
+# Right hand values *must* end with a forward slash for Maildir to be used
+
+# example.org
+me@example.org example.org/me/

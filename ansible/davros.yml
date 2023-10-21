@@ -1,0 +1,246 @@
+- name: davros playbook
+  hosts: davros
+  vars_files:
+    - vars.yml
+    - davros-vars.yml
+
+  tasks:
+    # Packages and updates
+    - name: add buster-backports repository
+      apt_repository:
+        repo: deb http://httpredir.debian.org/debian buster-backports main contrib non-free
+
+    - name: install required packages
+      apt:
+        name: "{{ install_packages }}"
+        update_cache: "{{ apt_update_cache }}"
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+
+    - name: install required packages from backports
+      apt:
+        name: "{{ install_packages_backports }}"
+        state: present
+        default_release: buster-backports
+        update_cache: "{{ apt_update_cache }}"
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+
+    - name: copy hostname
+      copy:
+        src: files/etc/hostname
+        dest: /etc/hostname
+        mode: 0644
+        owner: root
+        group: root
+
+    - name: copy hosts
+      copy:
+        src: files/etc/hosts
+        dest: /etc/hosts
+        mode: 0644
+        owner: root
+        group: root
+
+    - name: create directory for local apt scripts
+      file:
+        path: "{{ apt_local_bin_dir }}"
+        state: directory
+
+    - name: copy update script
+      copy:
+        src: files/apt/update.sh
+        dest: "{{ apt_local_bin_dir }}/update.sh"
+        mode: 0700
+
+    - name: cron job for update script
+      cron:
+        name: apt-update
+        hour: 13
+        minute: 15
+        job: "{{ apt_local_bin_dir }}/update.sh"
+        disabled: yes
+
+    - name: copy unattended-upgrades 02periodic
+      copy:
+        src: files/unattended-upgrades/02periodic
+        dest: "{{ apt_config_dir }}/02periodic"
+        mode: 0644
+
+    - name: copy unattended-upgrades 50unattended-upgrades
+      copy:
+        src: files/unattended-upgrades/50unattended-upgrades
+        dest: "{{ apt_config_dir }}/50unattended-upgrades"
+        mode: 0644
+
+    # SSH
+    - name: copy sshd_config
+      copy:
+        src: files/ssh/sshd_config
+        dest: /etc/ssh/sshd_config
+        mode: 0644
+        owner: root
+        group: root
+      notify: reload sshd
+
+    - name: ensure sshd is running
+      service:
+        name: sshd
+        state: started
+
+    # Users
+    - name: add user paul
+      user:
+        name: paul
+        shell: "{{ default_shell }}"
+
+    - name: set up keys for paul
+      authorized_key:
+        user: paul
+        key: "{{ item }}"
+      with_file:
+        - "{{ public_keys_dir }}/xyz.pub"
+
+    - name: set up keys for root
+      authorized_key:
+        user: root
+        key: "{{ item }}"
+      with_file:
+        - "{{ public_keys_dir }}/xyz.pub"
+
+    # Monitoring
+    - name: copy monit configuration
+      copy:
+        src: files/monit/000-settings
+        dest: /etc/monit/conf.d/000-settings
+        mode: 0644
+      notify: reload monit
+
+    # Apache
+    - name: enable apache modules
+      with_items: "{{ apache_modules }}"
+      apache2_module:
+        name: "{{ item }}"
+        state: present
+      notify: restart apache
+
+    - name: create apache document roots
+      with_items: "{{ vhosts_document_roots }}"
+      file:
+        path: "{{ vhosts_top_dir }}/{{ item }}/public_html"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: 0755
+
+    - name: copy apache virtual host configuration files
+      with_items: "{{ vhosts_files }}"
+      copy:
+        src: "files/apache/vhosts/{{ item }}.conf"
+        dest: "{{ vhosts_available_dir }}/{{ item }}.conf"
+      notify: reload apache
+
+    - name: enable vhost configuration files
+      with_items: "{{ vhosts_files }}"
+      file:
+        src: "{{ vhosts_available_dir }}/{{ item }}.conf"
+        dest: "{{ vhosts_enabled_dir }}/{{ item }}.conf"
+        state: link
+      notify: reload apache
+
+    - name: copy PHP configuration override
+      copy:
+        src: "files/apache/99-local.ini"
+        dest: "/etc/php5/apache2/conf.d/99-local.ini"
+      notify: reload apache
+
+    - name: create directory for certbot scripts
+      file:
+        path: "{{ certbot_bin_dir }}"
+        state: directory
+
+    - name: copy certbot renew script
+      copy:
+        src: files/certbot/renew-apache2.sh
+        dest: "{{ certbot_script_renew }}"
+        mode: 0700
+
+    - name: letsencrypt renewal cron job
+      cron:
+        name: letsencrypt-renew
+        hour: 4
+        minute: 25
+        job: "{{ certbot_script_renew }}"
+
+    # Backups
+    - name: create directory for backup scripts
+      file:
+        path: "{{ backup_bin_dir }}"
+        state: directory
+
+    - name: create directory for backup dumps
+      file:
+        path: "{{ backup_dump_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0700
+
+    - name: copy backup tar script
+      copy:
+        src: files/backups/tar.sh
+        dest: "{{ backup_script_tar }}"
+        mode: 0700
+
+    - name: copy backup wrapper script
+      template:
+        src: templates/backups/backup.sh.j2
+        dest: "{{ backup_script_wrapper }}"
+        owner: root
+        group: root
+        mode: 0700
+
+    - name: create directory for backup configuration
+      file:
+        path: "{{ backup_config_dir }}"
+        state: directory
+
+    - name: copy backup configuration include
+      copy:
+        src: files/backups/include
+        dest: "{{ backup_config_dir }}/davros.xk7.net-include"
+        mode: 0644
+
+    - name: copy backup configuration exclude
+      copy:
+        src: files/backups/exclude
+        dest: "{{ backup_config_dir }}/davros.xk7.net-exclude"
+        mode: 0644
+
+    - name: add cron job
+      cron:
+        name: "tar backup"
+        user: root
+        hour: 5
+        minute: 45
+        job: "{{ backup_script_wrapper }}"
+        state: present
+
+  handlers:
+    - name: reload sshd
+      service:
+        name: sshd
+        state: reloaded
+
+    - name: reload monit
+      service:
+        name: monit
+        state: reloaded
+
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
+
+    - name: reload apache
+      service:
+        name: apache2
+        state: reloaded

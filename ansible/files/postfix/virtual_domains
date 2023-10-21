@@ -1,0 +1,3 @@
+# OK column is required because Postfix files must have data on
+# left and right hand sides.
+example.org OK

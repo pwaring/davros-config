@@ -1,0 +1,82 @@
+# Security-related functionality, e.g. firewall installation and setup
+- name: configure packages
+  hosts: davros
+  vars_files:
+    - vars.yml
+  vars:
+    install_packages:
+      - ufw
+      - sshguard
+
+  tasks:
+    - name: install required packages
+      with_items: "{{ install_packages }}"
+      apt:
+        name: "{{ item }}"
+        update_cache: "{{ apt_update_cache }}"
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+
+    - name: sshd config
+      copy:
+        src: files/ssh/sshd_config
+        dest: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 0644
+      notify: reload sshd
+
+    - name: enable incoming ssh
+      ufw:
+        rule: allow
+        to_port: ssh
+
+    - name: enable incoming smtp
+      ufw:
+        rule: allow
+        to_port: smtp
+
+    - name: enable incoming http
+      ufw:
+        rule: allow
+        to_port: http
+
+    - name: enable incoming https
+      ufw:
+        rule: allow
+        to_port: https
+
+    - name: enable incoming imap
+      ufw:
+        rule: allow
+        to_port: imap
+
+    - name: enable incoming imaps
+      ufw:
+        rule: allow
+        to_port: imaps
+
+    - name: enable incoming submission (587)
+      ufw:
+        rule: allow
+        to_port: submission
+
+    - name: allow all outgoing traffic
+      ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: deny all incoming traffic
+      ufw:
+        direction: incoming
+        policy: deny
+        log: yes
+
+    - name: reload ufw
+      ufw:
+        state: reloaded
+
+  handlers:
+    - name: reload sshd
+      service:
+        name: sshd
+        state: reload

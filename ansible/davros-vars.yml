@@ -1,0 +1,50 @@
+install_packages:
+  - reportbug
+  - screen
+  - vim
+  - mutt
+  - unzip
+  - apt-listchanges
+  - dnsutils
+  - htop
+  - rsync
+  - monit
+  - apache2
+  - libapache2-mod-php5
+  - php-gd
+  - unattended-upgrades
+  - opendkim
+  - opendkim-tools
+
+install_packages_backports:
+  - certbot
+
+public_keys_dir: files/ssh-keys
+default_shell: /bin/bash
+
+vhosts_available_dir: /etc/apache2/sites-available
+vhosts_enabled_dir: /etc/apache2/sites-enabled
+vhosts_top_dir: /var/www
+
+vhosts_files:
+  - lists.xk7.net
+  - davros.xk7.net
+
+vhosts_document_roots:
+  - lists.xk7.net
+  - davros.xk7.net
+
+apache_modules:
+  - rewrite
+  - cgi
+  - ssl
+
+certbot_bin_dir: /usr/local/bin/certbot
+certbot_script_renew: "{{ certbot_bin_dir }}/renew.sh"
+
+backup_lvm: /dev/vdb
+backup_bin_dir: /usr/local/bin/backups
+backup_config_dir: /etc/local/backups
+backup_dump_dir: /root/backups
+backup_script_wrapper: "{{ backup_bin_dir }}/backup.sh"
+backup_script_tar: "{{ backup_bin_dir }}/tar.sh"

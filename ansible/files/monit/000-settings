@@ -1,0 +1,16 @@
+set mailserver localhost
+set alert me@example.org
+
+# Disable alerts when Monit starts, stops or performs user-initiated action
+set alert me@example.org not on { instance, action }
+
+set httpd port 2812 and
+  use address localhost
+  allow localhost
+
+check host example-http with address www.example.com
+  if failed port 80 protocol http then alert
+
+check filesystem rootfs with path /
+  every "00 11 * * *"
+  if space usage > 40% then alert

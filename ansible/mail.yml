@@ -1,0 +1,239 @@
+- name: configure mail
+  hosts: davros
+  vars_files:
+    - vars.yml
+  vars:
+    virtual_mail_user: virtualmail
+    virtual_mail_group: virtualmail
+    virtual_domains:
+      - example.org
+    install_packages:
+      - postfix
+      - postfix-pcre
+      - spampd
+      - spamassassin
+      - dovecot-imapd
+      - mailman
+      - postfix-policyd-spf-python
+
+  tasks:
+    - name: install required packages
+      apt:
+        name: "{{ install_packages }}"
+        update_cache: "{{ apt_update_cache }}"
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+
+    - name: copy mailname
+      copy:
+        src: files/mail/mailname
+        dest: /etc/mailname
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: create virtualmail group
+      group:
+        name: "{{ virtual_mail_group }}"
+        gid: 5000
+
+    - name: create virtualmail user
+      user:
+        name: "{{ virtual_mail_user }}"
+        uid: 5000
+        createhome: no
+        group: "{{ virtual_mail_group }}"
+
+    - name: create virtual domain directories
+      with_items: "{{ virtual_domains }}"
+      file:
+        path: "/var/mail/vhosts/{{ item }}"
+        state: directory
+        owner: "{{ virtual_mail_user }}"
+        group: "{{ virtual_mail_group }}"
+        mode: 0700
+
+    - name: copy postfix main.cf
+      copy:
+        src: files/postfix/main.cf
+        dest: /etc/postfix/main.cf
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy postfix master.cf
+      copy:
+        src: files/postfix/master.cf
+        dest: /etc/postfix/master.cf
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy mailman config
+      copy:
+        src: files/mailman/mm_cfg.py
+        dest: /etc/mailman/mm_cfg.py
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy postfix header_checks
+      copy:
+        src: files/postfix/header_checks
+        dest: /etc/postfix/header_checks
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy postfix helo_checks
+      copy:
+        src: files/postfix/helo_checks
+        dest: /etc/postfix/helo_checks
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash helo_checks list
+      command: /usr/sbin/postmap hash:/etc/postfix/helo_checks
+
+    - name: copy postfix transport
+      copy:
+        src: files/postfix/transport
+        dest: /etc/postfix/transport
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash transport list
+      command: /usr/sbin/postmap hash:/etc/postfix/transport
+
+    - name: copy aliases list
+      copy:
+        src: files/postfix/aliases
+        dest: /etc/aliases
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash aliases list
+      command: /usr/bin/newaliases
+
+    - name: copy virtual domains list
+      copy:
+        src: files/postfix/virtual_domains
+        dest: /etc/postfix/virtual_domains
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash virtual domains list
+      command: /usr/sbin/postmap hash:/etc/postfix/virtual_domains
+
+    - name: copy virtual aliases list
+      copy:
+        src: files/postfix/virtual_aliases
+        dest: /etc/postfix/virtual_aliases
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash virtual aliases list
+      command: /usr/sbin/postmap hash:/etc/postfix/virtual_aliases
+
+    - name: copy relay recipient maps list
+      copy:
+        src: files/postfix/relay_recipient_maps
+        dest: /etc/postfix/relay_recipient_maps
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash relay recipient maps list
+      command: /usr/sbin/postmap hash:/etc/postfix/relay_recipient_maps
+
+    - name: copy virtual mailboxes list
+      copy:
+        src: files/postfix/virtual_mailboxes
+        dest: /etc/postfix/virtual_mailboxes
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: hash virtual mailboxes list
+      command: /usr/sbin/postmap hash:/etc/postfix/virtual_mailboxes
+
+    - name: copy dovecot configuration (auth)
+      copy:
+        src: files/dovecot/10-auth.conf
+        dest: /etc/dovecot/conf.d/10-auth.conf
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy dovecot configuration (local)
+      copy:
+        src: files/dovecot/zz-local.conf
+        dest: /etc/dovecot/conf.d/zz-local.conf
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: copy dovecot passwd db
+      copy:
+        src: files/dovecot/passwd
+        dest: /etc/dovecot/passwd
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+    
+    # OpenDKIM
+    - name: copy opendkim keys table
+      copy:
+        src: files/opendkim/keytable
+        dest: /etc/dkimkeys/
+        owner: opendkim
+        group: opendkim
+        mode: '0644'
+    
+    - name: copy opendkim signing table
+      copy:
+        src: files/opendkim/signingtable
+        dest: /etc/dkimkeys/
+        owner: opendkim
+        group: opendkim
+        mode: '0644'
+    
+    - name: copy opendkim trusted hosts
+      copy:
+        src: files/opendkim/trustedhosts
+        dest: /etc/dkimkeys/
+        owner: opendkim
+        group: opendkim
+        mode: '0644'
+    
+    - name: copy opendkim configuration
+      blockinfile:
+        path: /etc/opendkim.conf
+        block: "{{ lookup('file', './files/opendkim/extra.conf') }}"
+
+
+    # This must be the last task in the playbook, otherwise a broken config
+    # will prevent postfix from starting up again
+    - name: ensure postfix is running
+      service:
+        name: postfix
+        state: restarted
+
+    - name: ensure mailman is running
+      service:
+        name: mailman
+        state: restarted
+
+    - name: ensure dovecot is running
+      service:
+        name: dovecot
+        state: restarted
+    
+    - name: ensure opendkim is running
+      service:
+        name: opendkim
+        state: restarted

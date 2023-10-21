@@ -1,0 +1,5 @@
+# Variables which apply to most or all playbooks
+apt_update_cache: yes
+apt_cache_valid_time: 86400
+apt_local_bin_dir: /usr/local/bin/apt
+apt_config_dir: /etc/apt/apt.conf.d

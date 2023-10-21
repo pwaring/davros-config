@@ -1,0 +1,12 @@
+# Aliases file for davros.xk7.net
+# RFC 2142 aliases
+abuse:                           root
+noc:                             root
+security:                        root
+postmaster:                      root
+hostmaster:                      root
+webmaster:                       root
+www:                             webmaster
+www-data:                        webmaster
+root:                            me@example.org
+list:                            webmaster

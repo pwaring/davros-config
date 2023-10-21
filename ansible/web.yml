@@ -1,0 +1,100 @@
+- name: configure websites
+  hosts: davros
+  become_user: False
+  vars_files:
+    - vars.yml
+  vars:
+    vhosts_available_dir: /etc/apache2/sites-available
+    vhosts_enabled_dir: /etc/apache2/sites-enabled
+    vhosts_top_dir: /var/www
+    static_sites_local_dir: /home/paul/sites
+    vhosts_files:
+      - davros.xk7.net
+      - lists.xk7.net
+    vhosts_document_roots:
+      - davros.xk7.net
+      - xk7.net
+      - www.xk7.net
+    install_packages:
+      - apache2
+      - libapache2-mod-php5
+      - php-gd
+      - libphp-adodb
+      - zendframework
+    apache_modules:
+      - rewrite
+      - cgi
+      - ssl
+
+  tasks:
+    - name: install required packages
+      with_items: "{{ install_packages }}"
+      apt:
+        name: "{{ item }}"
+        update_cache: "{{ apt_update_cache }}"
+        cache_valid_time: "{{ apt_cache_valid_time }}"
+      notify: restart apache
+
+    - name: enable apache modules
+      with_items: "{{ apache_modules }}"
+      apache2_module:
+        name: "{{ item }}"
+        state: present
+      notify: restart apache
+
+    - name: copy PHP configuration override
+      copy:
+        src: "files/apache/99-local.ini"
+        dest: "/etc/php5/apache2/conf.d/99-local.ini"
+      notify: reload apache
+
+    - name: synchronize default vhost
+      synchronize:
+        src: files/websites/default/
+        dest: /var/www/html/
+        archive: no
+        recursive: yes
+
+    - name: set permissions on default vhost content
+      file:
+        path: /var/www/html/
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+        mode: u=rwX,g=rX,o=rX
+
+    - name: copy vhost configuration files
+      with_items: "{{ vhosts_files }}"
+      copy:
+        src: "files/apache/vhosts/{{ item }}.conf"
+        dest: "{{ vhosts_available_dir }}/{{ item }}.conf"
+      notify: reload apache
+
+    - name: enable vhost configuration files
+      with_items: "{{ vhosts_files }}"
+      file:
+        src: "{{ vhosts_available_dir }}/{{ item }}.conf"
+        dest: "{{ vhosts_enabled_dir }}/{{ item }}.conf"
+        state: link
+      notify: reload apache
+
+    - name: create vhost document roots
+      with_items: "{{ vhosts_document_roots }}"
+      file:
+        path: "{{ vhosts_top_dir }}/{{ item }}/public_html"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: 0755
+
+  handlers:
+    - name: reload apache
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
